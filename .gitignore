@@ -1,0 +1,9 @@
+# Binaries
+cpf
+dist/
+
+# Test coverage
+coverage.txt
+
+# macOS
+.DS_Store 
