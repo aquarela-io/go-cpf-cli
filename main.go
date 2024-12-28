@@ -165,13 +165,13 @@ func generateCPF(formatted, invalid bool) (string, error) {
 func printVersion() {
 	fmt.Printf("CPF Tool version %s (%s) built on %s\n", version, commit, date)
 	fmt.Println("Developed by Diego Peixoto for aquarela.io")
-	fmt.Printf("Copyright © 2024-%d\n", time.Now().Year())
+	fmt.Printf("Copyleft © 2024-%d\n", time.Now().Year())
 }
 
 func printHelp() {
 	help := `CPF Tool
 Developed by Diego Peixoto for aquarela.io
-Copyright © 2024-%d
+Copyleft © 2024-%d
 
 Usage:
   cpf <command> [options]
@@ -218,7 +218,7 @@ func main() {
 	command := strings.ToLower(args[0])
 
 	switch command {
-	case "version", "-V":
+	case "version":
 		printVersion()
 		return
 	case "help", "--help", "-h":
