@@ -26,7 +26,7 @@ func unformatCPF(cpfStr string) string {
 }
 
 // isRepeated checks if the string is composed entirely of the same character
-// (e.g. "00000000000").
+// (e.g. "00000000000 or 11111111111G").
 func isRepeated(s string) bool {
 	if len(s) == 0 {
 		return false
