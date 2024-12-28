@@ -87,7 +87,48 @@ cpf validate 123.456.789-09
 
 # Clean CPF formatting
 cpf clean "123.456.789-09"
+
+# Telemetry Management
+cpf telemetry enable    # Enable telemetry
+cpf telemetry disable   # Disable telemetry
+cpf telemetry status    # Check telemetry status
 ```
+
+## Telemetry
+
+This tool includes optional telemetry to help us understand how it's being used and improve it. We use [PostHog](https://posthog.com/) for telemetry collection. The telemetry:
+
+- Is **disabled by default**
+- Only collects anonymous usage data:
+  - Commands used
+  - Success/error rates
+  - OS and architecture
+  - CLI version
+- Never collects personal information or CPF numbers
+- Can be enabled/disabled at any time using the `cpf telemetry` command
+- Stores its configuration in `~/.cpf-cli/telemetry.json`
+
+To manage telemetry:
+
+```bash
+cpf telemetry enable    # Enable telemetry
+cpf telemetry disable   # Disable telemetry
+cpf telemetry status    # Check current status
+```
+
+### Building with Telemetry
+
+When building from source, you can configure the PostHog API key at build time:
+
+```bash
+# Build with PostHog API key
+POSTHOG_API_KEY=your_api_key go build -ldflags="-X github.com/diegopeixoto/cpf-cli-go/pkg/telemetry.apiKey=$POSTHOG_API_KEY"
+
+# Or using make (if you have a Makefile)
+make build POSTHOG_API_KEY=your_api_key
+```
+
+The official releases are built with telemetry enabled and configured to send data to our PostHog instance. This helps us understand how the tool is being used and improve it. You can always disable telemetry after installation using `cpf telemetry disable`.
 
 ## Contributing
 

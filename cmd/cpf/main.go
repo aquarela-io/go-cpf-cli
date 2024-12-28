@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/diegopeixoto/cpf-cli-go/pkg/cpf"
+	"github.com/diegopeixoto/cpf-cli-go/pkg/telemetry"
 )
 
 var (
@@ -36,6 +37,12 @@ Commands:
   generate, -g          Generate random CPF(s).
   version, -V          Show version information.
   help, -h, --help     Show this help message.
+  telemetry            Configure telemetry settings.
+
+Telemetry Commands:
+  telemetry enable              Enable telemetry
+  telemetry disable             Disable telemetry
+  telemetry status              Show telemetry status
 
 Options for "generate":
   --invalid          Generate invalid CPF(s).
@@ -54,13 +61,22 @@ Examples:
   cpf -f 12345678909                 Format a CPF
   cpf -g                             Generate a CPF
   cpf -g --invalid --json            Generate invalid CPF in JSON format
-  cpf format --file=cpfs.txt --output=formatted.json`
+  cpf format --file=cpfs.txt --output=formatted.json
+  cpf telemetry enable               Enable telemetry
+  cpf telemetry disable              Disable telemetry
+  cpf telemetry status               Show telemetry status`
 
 	fmt.Printf(help, time.Now().Year())
 	fmt.Println()
 }
 
 func main() {
+	// Initialize telemetry
+	if err := telemetry.Initialize(version); err != nil {
+		// Silently continue if telemetry initialization fails
+		_ = err
+	}
+
 	args := os.Args[1:]
 
 	if len(args) == 0 {
@@ -70,8 +86,52 @@ func main() {
 
 	command := strings.ToLower(args[0])
 
+	// Handle telemetry commands first
+	if command == "telemetry" {
+		if len(args) < 2 {
+			fmt.Println("Usage: cpf telemetry [enable|disable|status]")
+			os.Exit(1)
+		}
+
+		switch strings.ToLower(args[1]) {
+		case "enable":
+			if err := telemetry.SetEnabled(true); err != nil {
+				fmt.Fprintf(os.Stderr, "Error enabling telemetry: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Telemetry enabled")
+			return
+		case "disable":
+			if err := telemetry.SetEnabled(false); err != nil {
+				fmt.Fprintf(os.Stderr, "Error disabling telemetry: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Telemetry disabled")
+			return
+		case "status":
+			if telemetry.IsEnabled() {
+				fmt.Println("Telemetry is enabled")
+			} else {
+				fmt.Println("Telemetry is disabled")
+			}
+			return
+		default:
+			fmt.Println("Usage: cpf telemetry [enable|disable|status]")
+			os.Exit(1)
+		}
+	}
+
+	// Track command execution
+	defer func() {
+		metadata := make(map[string]string)
+		if len(args) > 1 {
+			metadata["args"] = strings.Join(args[1:], " ")
+		}
+		telemetry.Track(command, true, nil, metadata)
+	}()
+
 	switch command {
-	case "version":
+	case "version", "-v":
 		printVersion()
 		return
 	case "help", "--help", "-h":
@@ -89,6 +149,7 @@ func main() {
 				filename := strings.TrimPrefix(args[i], "--file=")
 				results, err = cpf.ProcessFile(filename, cpf.ValidateProcessor)
 				if err != nil {
+					telemetry.Track(command, false, err, nil)
 					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 					os.Exit(1)
 				}
@@ -98,6 +159,8 @@ func main() {
 
 		if !hasFile {
 			if len(args) < 2 {
+				err := fmt.Errorf("missing CPF to validate")
+				telemetry.Track(command, false, err, nil)
 				fmt.Fprintln(os.Stderr, "Error: Missing CPF to validate.")
 				printHelp()
 				os.Exit(1)
@@ -117,12 +180,15 @@ func main() {
 		}
 
 		if err := cpf.WriteJSONOutput(results, outputFile); err != nil {
+			telemetry.Track(command, false, err, nil)
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
 	case "format", "-f":
 		if len(args) < 2 {
+			err := fmt.Errorf("missing CPF to format")
+			telemetry.Track(command, false, err, nil)
 			fmt.Fprintln(os.Stderr, "Error: Missing CPF to format.")
 			printHelp()
 			os.Exit(1)
@@ -130,6 +196,7 @@ func main() {
 		cpfToFormat := args[1]
 		formatted, err := cpf.FormatCPF(cpfToFormat)
 		if err != nil {
+			telemetry.Track(command, false, err, nil)
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -156,6 +223,7 @@ func main() {
 				countStr := strings.TrimPrefix(arg, "--count=")
 				n, err := strconv.Atoi(countStr)
 				if err != nil || n <= 0 {
+					telemetry.Track(command, false, err, nil)
 					fmt.Fprintf(os.Stderr, "Error: Invalid count value '%s'. Must be a positive number.\n", countStr)
 					os.Exit(1)
 				}
@@ -165,6 +233,8 @@ func main() {
 			case strings.HasPrefix(arg, "--output="):
 				outputFile = strings.TrimPrefix(arg, "--output=")
 			default:
+				err := fmt.Errorf("unknown option '%s'", arg)
+				telemetry.Track(command, false, err, nil)
 				fmt.Fprintf(os.Stderr, "Error: Unknown option '%s'\n", arg)
 				printHelp()
 				os.Exit(1)
@@ -174,11 +244,13 @@ func main() {
 		if useJSON {
 			results, err := cpf.GenerateCPFsJSON(count, !unformatted, invalid)
 			if err != nil {
+				telemetry.Track(command, false, err, nil)
 				fmt.Fprintf(os.Stderr, "Error generating CPFs: %v\n", err)
 				os.Exit(1)
 			}
 
 			if err := cpf.WriteJSONOutput(results, outputFile); err != nil {
+				telemetry.Track(command, false, err, nil)
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -188,6 +260,7 @@ func main() {
 			for i := 0; i < count; i++ {
 				generatedCPF, err := cpf.GenerateCPF(!unformatted, invalid)
 				if err != nil {
+					telemetry.Track(command, false, err, nil)
 					fmt.Fprintf(os.Stderr, "Error generating CPF: %v\n", err)
 					os.Exit(1)
 				}
@@ -200,6 +273,8 @@ func main() {
 		}
 
 	default:
+		err := fmt.Errorf("unknown command '%s'", command)
+		telemetry.Track(command, false, err, nil)
 		fmt.Fprintf(os.Stderr, "Error: Unknown command '%s'\n", command)
 		printHelp()
 		os.Exit(1)
