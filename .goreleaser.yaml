@@ -41,8 +41,8 @@ brews:
 
     # Git author for commits
     commit_author:
-      name: goreleaserbot
-      email: goreleaser@diegopeixoto.com
+      name: aquarela-bot
+      email: bot@aquarela.app
 
     # Commit message template
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"

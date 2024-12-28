@@ -163,20 +163,25 @@ func generateCPF(formatted, invalid bool) (string, error) {
 
 
 func printVersion() {
-	fmt.Printf("cpf version %s (%s) built on %s\n", version, commit, date)
+	fmt.Printf("CPF Tool version %s (%s) built on %s\n", version, commit, date)
+	fmt.Println("Developed by Diego Peixoto for aquarela.io")
+	fmt.Printf("Copyright © 2024-%d\n", time.Now().Year())
 }
 
+func printHelp() {
+	help := `CPF Tool
+Developed by Diego Peixoto for aquarela.io
+Copyright © 2024-%d
 
-func printUsage() {
-	usage := `
 Usage:
   cpf <command> [options]
 
 Commands:
-  validate <cpf>     Validate a given CPF.
-  format <cpf>       Format a given CPF to ###.###.###-##.
-  generate           Generate random CPF(s).
-  version            Show version information.
+  validate, -v          Validate CPF(s). Use --file to validate from file.
+  format, -f <cpf>      Format a given CPF to ###.###.###-##.
+  generate, -g          Generate random CPF(s).
+  version, -V           Show version information.
+  help, -h, --help     Show this help message.
 
 Options for "generate":
   --invalid          Generate invalid CPF(s).
@@ -190,14 +195,15 @@ File processing:
   --output=FILE     Write output to a file instead of stdout.
 
 Examples:
-  cpf validate 123.456.789-09
-  cpf format 12345678909
-  cpf generate
-  cpf generate --invalid --json
-  cpf validate --file=cpfs.txt
-  cpf format --file=cpfs.txt --output=formatted.json
-`
-	fmt.Fprintln(os.Stderr, usage)
+  cpf -v 123.456.789-09              Validate a single CPF
+  cpf validate --file=cpfs.txt       Validate CPFs from file
+  cpf -f 12345678909                 Format a CPF
+  cpf -g                             Generate a CPF
+  cpf -g --invalid --json            Generate invalid CPF in JSON format
+  cpf format --file=cpfs.txt --output=formatted.json`
+
+	fmt.Printf(help, time.Now().Year())
+	fmt.Println()
 }
 
 
@@ -205,29 +211,28 @@ func main() {
 	args := os.Args[1:]
 
 	if len(args) == 0 {
-		printUsage()
+		printHelp()
 		os.Exit(0)
 	}
 
 	command := strings.ToLower(args[0])
 
 	switch command {
-	case "version", "--version", "-v":
+	case "version", "-V":
 		printVersion()
 		return
-	case "validate":
-		if len(args) < 2 && !strings.HasPrefix(args[1], "--file=") {
-			fmt.Fprintln(os.Stderr, "Error: Missing CPF to validate.")
-			printUsage()
-			os.Exit(1)
-		}
-
+	case "help", "--help", "-h":
+		printHelp()
+		return
+	case "validate", "-v":
 		var results []CPFResult
 		var err error
 
 		// Check if we're processing a file
+		hasFile := false
 		for i := 1; i < len(args); i++ {
 			if strings.HasPrefix(args[i], "--file=") {
+				hasFile = true
 				filename := strings.TrimPrefix(args[i], "--file=")
 				results, err = processFile(filename, validateProcessor)
 				if err != nil {
@@ -238,7 +243,12 @@ func main() {
 			}
 		}
 
-		if results == nil {
+		if !hasFile {
+			if len(args) < 2 {
+				fmt.Fprintln(os.Stderr, "Error: Missing CPF to validate.")
+				printHelp()
+				os.Exit(1)
+			}
 			// Single CPF validation
 			cpfToValidate := args[1]
 			results = []CPFResult{validateProcessor(cpfToValidate)}
@@ -269,10 +279,10 @@ func main() {
 			fmt.Println(string(output))
 		}
 
-	case "format":
+	case "format", "-f":
 		if len(args) < 2 {
 			fmt.Fprintln(os.Stderr, "Error: Missing CPF to format.")
-			printUsage()
+			printHelp()
 			os.Exit(1)
 		}
 		cpfToFormat := args[1]
@@ -283,7 +293,7 @@ func main() {
 		}
 		fmt.Println(formatted)
 
-	case "generate":
+	case "generate", "-g":
 		invalid := false
 		unformatted := false
 		count := 1
@@ -314,7 +324,7 @@ func main() {
 				outputFile = strings.TrimPrefix(arg, "--output=")
 			default:
 				fmt.Fprintf(os.Stderr, "Error: Unknown option '%s'\n", arg)
-				printUsage()
+				printHelp()
 				os.Exit(1)
 			}
 		}
@@ -359,7 +369,7 @@ func main() {
 
 	default:
 		fmt.Fprintf(os.Stderr, "Error: Unknown command '%s'\n", command)
-		printUsage()
+		printHelp()
 		os.Exit(1)
 	}
 }
