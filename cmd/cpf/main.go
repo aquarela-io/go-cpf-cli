@@ -131,7 +131,7 @@ func main() {
 	}()
 
 	switch command {
-	case "version", "-v":
+	case "version":
 		printVersion()
 		return
 	case "help", "--help", "-h":
