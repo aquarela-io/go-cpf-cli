@@ -17,22 +17,45 @@ brew tap diegopeixoto/cpf-cli-go
 brew install cpf-cli-go
 ```
 
-### Linux and Manual Installation
+### Manual Installation
 
-1. Download the latest release for your platform (Linux/macOS) from the [releases page](https://github.com/diegopeixoto/cpf-cli-go/releases)
+1. Download the latest release for your platform from the [releases page](https://github.com/diegopeixoto/cpf-cli-go/releases):
+
+   - Windows: `cpf-cli-go_Windows_x86_64.zip`
+   - Linux: `cpf-cli-go_Linux_x86_64.tar.gz`
+   - macOS: `cpf-cli-go_Darwin_x86_64.zip`
+
 2. Extract the archive:
+
    ```bash
+   # For Windows:
+   # Extract the .zip file using Windows Explorer or:
+   unzip cpf-cli-go_Windows_x86_64.zip
+
    # For Linux:
    tar xzf cpf-cli-go_Linux_x86_64.tar.gz
+
    # For macOS:
    unzip cpf-cli-go_Darwin_x86_64.zip
    ```
-3. Move the binary to your PATH:
-   ```bash
-   sudo mv cpf /usr/local/bin/
-   ```
+
+3. Add to PATH:
+
+   - **Windows**:
+     - Move `cpf.exe` to a directory like `C:\Program Files\cpf-cli-go\`
+     - Add that directory to your PATH environment variable
+   - **Linux/macOS**:
+     ```bash
+     sudo mv cpf /usr/local/bin/
+     ```
+
 4. Verify the installation:
+
    ```bash
+   # Windows
+   cpf.exe --version
+
+   # Linux/macOS
    cpf --version
    ```
 
