@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -181,15 +183,19 @@ Options for "generate":
   --unformatted     Generate unformatted CPF(s).
   --count=N         Generate N CPFs (default: 1).
   --separator=X     Separator between multiple CPFs (default: newline).
+  --json            Output in JSON format.
+
+File processing:
+  --file=FILE       Process CPFs from a file (one per line).
+  --output=FILE     Write output to a file instead of stdout.
 
 Examples:
   cpf validate 123.456.789-09
   cpf format 12345678909
   cpf generate
-  cpf generate --invalid
-  cpf generate --unformatted
-  cpf generate --count=5
-  cpf generate --count=3 --separator=,
+  cpf generate --invalid --json
+  cpf validate --file=cpfs.txt
+  cpf format --file=cpfs.txt --output=formatted.json
 `
 	fmt.Fprintln(os.Stderr, usage)
 }
@@ -210,17 +216,57 @@ func main() {
 		printVersion()
 		return
 	case "validate":
-		if len(args) < 2 {
+		if len(args) < 2 && !strings.HasPrefix(args[1], "--file=") {
 			fmt.Fprintln(os.Stderr, "Error: Missing CPF to validate.")
 			printUsage()
 			os.Exit(1)
 		}
-		cpfToValidate := args[1]
-		if validateCPF(cpfToValidate, false) {
-			fmt.Println("CPF is valid!")
-		} else {
-			fmt.Println("CPF is invalid.")
+
+		var results []CPFResult
+		var err error
+
+		// Check if we're processing a file
+		for i := 1; i < len(args); i++ {
+			if strings.HasPrefix(args[i], "--file=") {
+				filename := strings.TrimPrefix(args[i], "--file=")
+				results, err = processFile(filename, validateProcessor)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+					os.Exit(1)
+				}
+				break
+			}
+		}
+
+		if results == nil {
+			// Single CPF validation
+			cpfToValidate := args[1]
+			results = []CPFResult{validateProcessor(cpfToValidate)}
+		}
+
+		// Check if we should output to a file
+		outputFile := ""
+		for i := 1; i < len(args); i++ {
+			if strings.HasPrefix(args[i], "--output=") {
+				outputFile = strings.TrimPrefix(args[i], "--output=")
+				break
+			}
+		}
+
+		// Output results
+		output, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
+		}
+
+		if outputFile != "" {
+			if err := os.WriteFile(outputFile, output, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "Error writing to file: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Println(string(output))
 		}
 
 	case "format":
@@ -242,6 +288,8 @@ func main() {
 		unformatted := false
 		count := 1
 		separator := "\n"
+		useJSON := false
+		outputFile := ""
 
 		for i := 1; i < len(args); i++ {
 			arg := args[i]
@@ -250,6 +298,8 @@ func main() {
 				invalid = true
 			case arg == "--unformatted":
 				unformatted = true
+			case arg == "--json":
+				useJSON = true
 			case strings.HasPrefix(arg, "--count="):
 				countStr := strings.TrimPrefix(arg, "--count=")
 				n, err := strconv.Atoi(countStr)
@@ -260,6 +310,8 @@ func main() {
 				count = n
 			case strings.HasPrefix(arg, "--separator="):
 				separator = strings.TrimPrefix(arg, "--separator=")
+			case strings.HasPrefix(arg, "--output="):
+				outputFile = strings.TrimPrefix(arg, "--output=")
 			default:
 				fmt.Fprintf(os.Stderr, "Error: Unknown option '%s'\n", arg)
 				printUsage()
@@ -267,19 +319,42 @@ func main() {
 			}
 		}
 
-		// Generate multiple CPFs
-		cpfs := make([]string, 0, count)
-		for i := 0; i < count; i++ {
-			cpf, err := generateCPF(!unformatted, invalid)
+		if useJSON {
+			results, err := generateCPFsJSON(count, !unformatted, invalid)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error generating CPF: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Error generating CPFs: %v\n", err)
 				os.Exit(1)
 			}
-			cpfs = append(cpfs, cpf)
-		}
-		fmt.Print(strings.Join(cpfs, separator))
-		if separator == "\n" {
-			fmt.Println()
+
+			output, err := json.MarshalIndent(results, "", "  ")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+
+			if outputFile != "" {
+				if err := os.WriteFile(outputFile, output, 0644); err != nil {
+					fmt.Fprintf(os.Stderr, "Error writing to file: %v\n", err)
+					os.Exit(1)
+				}
+			} else {
+				fmt.Println(string(output))
+			}
+		} else {
+			// Generate multiple CPFs
+			cpfs := make([]string, 0, count)
+			for i := 0; i < count; i++ {
+				cpf, err := generateCPF(!unformatted, invalid)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error generating CPF: %v\n", err)
+					os.Exit(1)
+				}
+				cpfs = append(cpfs, cpf)
+			}
+			fmt.Print(strings.Join(cpfs, separator))
+			if separator == "\n" {
+				fmt.Println()
+			}
 		}
 
 	default:
@@ -287,4 +362,75 @@ func main() {
 		printUsage()
 		os.Exit(1)
 	}
+}
+
+// Add these new types for JSON output
+type CPFResult struct {
+	CPF     string `json:"cpf"`
+	Valid   bool   `json:"valid,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Original string `json:"original,omitempty"`
+}
+
+// Add this new function to process files
+func processFile(filename string, processFunc func(string) CPFResult) ([]CPFResult, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	var results []CPFResult
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		results = append(results, processFunc(line))
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading file: %w", err)
+	}
+
+	return results, nil
+}
+
+// Add validation processor
+func validateProcessor(cpf string) CPFResult {
+	return CPFResult{
+		CPF:      cpf,
+		Valid:    validateCPF(cpf, false),
+		Original: cpf,
+	}
+}
+
+// Add format processor
+func formatProcessor(cpf string) CPFResult {
+	formatted, err := formatCPF(cpf)
+	if err != nil {
+		return CPFResult{
+			CPF:      cpf,
+			Error:    err.Error(),
+			Original: cpf,
+		}
+	}
+	return CPFResult{
+		CPF:      formatted,
+		Original: cpf,
+	}
+}
+
+// Update generateCPF to support JSON output
+func generateCPFsJSON(count int, formatted, invalid bool) ([]CPFResult, error) {
+	results := make([]CPFResult, 0, count)
+	for i := 0; i < count; i++ {
+		cpf, err := generateCPF(formatted, invalid)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, CPFResult{CPF: cpf})
+	}
+	return results, nil
 }
