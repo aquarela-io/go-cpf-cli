@@ -1,15 +1,21 @@
 package cpf
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
-var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+func cryptoRandInt(max int) (int, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return 0, err
+	}
+	return int(n.Int64()), nil
+}
 
 // UnformatCPF removes all non-digit characters from the input string.
 func UnformatCPF(cpfStr string) string {
@@ -112,13 +118,25 @@ func ValidateCPF(cpfStr string, byLength bool) bool {
 func GenerateCPF(formatted, invalid bool) (string, error) {
 	digits9 := make([]int, 9)
 	for i := 0; i < 9; i++ {
-		digits9[i] = rng.Intn(10)
+		digit, err := cryptoRandInt(10)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random digit: %w", err)
+		}
+		digits9[i] = digit
 	}
 
 	var dv [2]int
 	if invalid {
-		dv[0] = rng.Intn(10)
-		dv[1] = rng.Intn(10)
+		d1, err := cryptoRandInt(10)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random digit: %w", err)
+		}
+		d2, err := cryptoRandInt(10)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random digit: %w", err)
+		}
+		dv[0] = d1
+		dv[1] = d2
 	} else {
 		correctDV, err := getCD(digits9)
 		if err != nil {
