@@ -1,28 +1,19 @@
 package telemetry
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/posthog/posthog-go"
 )
 
 // Config represents telemetry configuration
 type Config struct {
 	Enabled bool `json:"enabled"`
-}
-
-// PostHogEvent represents the event structure for PostHog
-type PostHogEvent struct {
-	ApiKey      string                 `json:"api_key"`
-	Event       string                 `json:"event"`
-	DistinctId  string                 `json:"distinct_id"`
-	Properties  map[string]interface{} `json:"properties"`
-	Timestamp   string                 `json:"timestamp"`
 }
 
 // Event represents a telemetry event
@@ -42,13 +33,24 @@ var (
 	configPath string
 	version    string // Will be set during initialization
 	apiKey     string // Will be set at build time
-	// PostHog Cloud endpoint
-	posthogEndpoint = "https://app.posthog.com/capture"
+	client     posthog.Client
 )
 
 // Initialize sets up telemetry with the given version
 func Initialize(v string) error {
 	version = v
+
+	// Initialize PostHog client if we have an API key
+	if apiKey != "" {
+		var err error
+		client, err = posthog.NewWithConfig(apiKey, posthog.Config{
+			Endpoint: "https://us.i.posthog.com",
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize PostHog client: %w", err)
+		}
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
@@ -100,7 +102,15 @@ func SetEnabled(enabled bool) error {
 
 // IsEnabled returns whether telemetry is enabled
 func IsEnabled() bool {
-	return config != nil && config.Enabled && apiKey != ""
+	return config != nil && config.Enabled && apiKey != "" && client != nil
+}
+
+// Close closes the PostHog client
+func Close() error {
+	if client != nil {
+		return client.Close()
+	}
+	return nil
 }
 
 // Track sends a telemetry event if telemetry is enabled
@@ -109,78 +119,30 @@ func Track(command string, success bool, err error, metadata map[string]string) 
 		return
 	}
 
-	event := Event{
-		Command:   command,
-		Success:   success,
-		OS:        runtime.GOOS,
-		Arch:      runtime.GOARCH,
-		Version:   version,
-		Timestamp: time.Now().UTC(),
-		Metadata:  metadata,
-	}
+	// Create a unique identifier for the installation
+	distinctId := fmt.Sprintf("%s-%s-%s", runtime.GOOS, runtime.GOARCH, version)
+
+	// Convert metadata to interface{} map
+	properties := make(map[string]interface{})
+	properties["command"] = command
+	properties["success"] = success
+	properties["os"] = runtime.GOOS
+	properties["arch"] = runtime.GOARCH
+	properties["version"] = version
+	properties["timestamp"] = time.Now().UTC()
 
 	if err != nil {
-		event.Error = err.Error()
+		properties["error"] = err.Error()
 	}
 
-	// Send event asynchronously to not block the main execution
-	go func() {
-		if err := sendEvent(event); err != nil {
-			// Silently fail - we don't want telemetry errors to affect the user
-			_ = err
-		}
-	}()
-}
-
-// sendEvent sends the telemetry event to PostHog
-func sendEvent(event Event) error {
-	// Convert our event to PostHog format
-	properties := map[string]interface{}{
-		"command":   event.Command,
-		"success":   event.Success,
-		"os":        event.OS,
-		"arch":      event.Arch,
-		"version":   event.Version,
-		"timestamp": event.Timestamp,
-	}
-
-	if event.Error != "" {
-		properties["error"] = event.Error
-	}
-
-	for k, v := range event.Metadata {
+	for k, v := range metadata {
 		properties[k] = v
 	}
 
-	phEvent := PostHogEvent{
-		ApiKey:     apiKey,
+	// Send event asynchronously
+	client.Enqueue(posthog.Capture{
+		DistinctId: distinctId,
 		Event:      "cli_command",
-		DistinctId: event.OS + "-" + event.Arch, // Anonymous identifier
 		Properties: properties,
-		Timestamp:  event.Timestamp.Format(time.RFC3339),
-	}
-
-	data, err := json.Marshal(phEvent)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", posthogEndpoint, bytes.NewBuffer(data))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	return nil
+	})
 } 

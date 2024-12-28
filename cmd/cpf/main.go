@@ -76,6 +76,8 @@ func main() {
 		// Silently continue if telemetry initialization fails
 		_ = err
 	}
+	// Ensure we close the telemetry client
+	defer telemetry.Close()
 
 	args := os.Args[1:]
 
