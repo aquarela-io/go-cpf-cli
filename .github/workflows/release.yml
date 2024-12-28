@@ -40,7 +40,7 @@ jobs:
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
-        if: steps.semantic.outputs.new-release-published == 'true'
+        if: steps.semantic.outputs.version != ''
         with:
           distribution: goreleaser
           version: latest
@@ -49,3 +49,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          VERSION: ${{ steps.semantic.outputs.version }}
