@@ -1,0 +1,114 @@
+version: 2
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    binary: cpf
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: darwin
+        format: zip
+
+brews:
+  - name: cpf
+    homepage: "https://github.com/diegopeixoto/go-cpf-cli"
+    description: "A CLI tool to validate, format and generate Brazilian CPF numbers"
+    license: "MIT"
+
+    # Git author for commits
+    commit_author:
+      name: goreleaserbot
+      email: goreleaser@diegopeixoto.com
+
+    # Commit message template
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+
+    # Repository configuration
+    repository:
+      owner: aquarela-io
+      name: homebrew-cpf
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+
+    # Installation directory
+    directory: Formula
+
+    # Dependencies
+    dependencies:
+      - name: go
+        type: build
+
+    # Test command
+    test: |
+      system "#{bin}/cpf", "--version"
+      output = shell_output("#{bin}/cpf generate --count=1")
+      assert_match(/\d{3}\.\d{3}\.\d{3}-\d{2}/, output)
+
+    # Installation script
+    install: |
+      bin.install "cpf"
+
+    # Usage instructions
+    caveats: |
+      To use cpf, you can run commands like:
+        cpf validate 123.456.789-09
+        cpf generate --count=5
+        cpf format 12345678909
+
+checksum:
+  name_template: "checksums.txt"
+
+signs:
+  - artifacts: checksum
+    args:
+      [
+        "--batch",
+        "-u",
+        "{{ .Env.GPG_FINGERPRINT }}",
+        "--output",
+        "${signature}",
+        "--detach-sign",
+        "${artifact}",
+      ]
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "Merge pull request"
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: "Bug fixes"
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Others
+      order: 999
