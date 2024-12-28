@@ -14,7 +14,7 @@ func TestValidateCPF(t *testing.T) {
 	}{
 		{"valid formatted CPF", "529.982.247-25", false, true},
 		{"valid unformatted CPF", "52998224725", false, true},
-		{"invalid CPF", "123.111.111-11", false, false},
+		{"invalid CPF", "113.111.111-11", false, false},
 		{"invalid length", "123", false, false},
 		{"valid length only", "12345678901", true, true},
 		{"invalid length check", "123456", true, false},
